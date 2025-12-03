@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  warzone-bot:
+    build: .
+    container_name: warzone-bot
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ADMIN_IDS=${ADMIN_IDS}
+      - PORT=8080
+    volumes:
+      - warzone_data:/app/data
+
+volumes:
+  warzone_data:
