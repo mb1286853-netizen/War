@@ -9,6 +9,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command, CommandObject
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.enums import ParseMode
+from aiogram.client.default import DefaultBotProperties  # <-- اضافه کن
 from aiohttp import web
 from dotenv import load_dotenv
 
@@ -23,7 +24,11 @@ if not BOT_TOKEN:
     print("❌ خطا: BOT_TOKEN تنظیم نشده!")
     exit(1)
 
-bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+# ✅ اصلاح خطا: استفاده از DefaultBotProperties
+bot = Bot(
+    token=BOT_TOKEN,
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+)
 dp = Dispatcher()
 
 # ==================== داده‌های بازی ====================
