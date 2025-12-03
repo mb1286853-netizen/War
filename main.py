@@ -751,43 +751,52 @@ async def manage_users_handler(message: types.Message):
     )
     @dp.message(F.text == "📊 آمار کامل")
 async def full_stats_handler(message: types.Message):
-    """آمار کامل ربات"""
+    """آمار کامل ربات - نسخه ساده"""
     if not is_admin(message.from_user.id):
         return
     
-    stats = get_bot_stats()
-    users = get_all_users()
-    
-    if not stats:
+    try:
+        # دریافت آمار
+        stats = get_bot_stats()
+        users = get_all_users()
+        
+        if not stats:
+            stats = {'total_users': 0, 'total_coins': 0, 'total_gems': 0, 'total_zp': 0, 'last_updated': int(datetime.now().timestamp())}
+        
+        if not users:
+            users = []
+        
+        # محاسبه مقادیر
+        user_count = len(users)
+        active_count = len([u for u in users if u.get('last_miner_claim', 0) > int(datetime.now().timestamp()) - 86400])
+        
+        total_coins = sum(u.get('zone_coin', 0) for u in users)
+        total_gems = sum(u.get('zone_gem', 0) for u in users)
+        total_zp = sum(u.get('zone_point', 0) for u in users)
+        
+        last_updated = datetime.fromtimestamp(stats.get('last_updated', int(datetime.now().timestamp()))).strftime('%Y-%m-%d %H:%M:%S')
+        
+        # ارسال پاسخ
+        await message.answer(
+            f"📊 <b>آمار کامل ربات</b>\n\n"
+            f"👥 <b>کاربران:</b>\n"
+            f"• مجموع کاربران: {user_count:,}\n"
+            f"• کاربران فعال: {active_count:,}\n\n"
+            f"💰 <b>اقتصاد بازی:</b>\n"
+            f"• مجموع سکه‌ها: {total_coins:,}\n"
+            f"• مجموع جم‌ها: {total_gems:,}\n"
+            f"• مجموع ZP: {total_zp:,}\n\n"
+            f"🏦 <b>آمار سرور:</b>\n"
+            f"• کل سکه تولید شده: {stats.get('total_coins', 0):,}\n"
+            f"• کل جم تولید شده: {stats.get('total_gems', 0):,}\n"
+            f"• کل ZP تولید شده: {stats.get('total_zp', 0):,}\n\n"
+            f"🕒 آخرین بروزرسانی: {last_updated}",
+            parse_mode=ParseMode.HTML
+        )
+        
+    except Exception as e:
+        logger.error(f"خطا در آمار: {e}")
         await message.answer("❌ خطا در دریافت آمار!")
-        return
-    
-    # محاسبه آمار پیشرفته
-    total_coins = sum(user['zone_coin'] for user in users)
-    total_gems = sum(user['zone_gem'] for user in users)
-    total_zp = sum(user['zone_point'] for user in users)
-    
-    # کاربران فعال (آخرین 24 ساعت)
-    now = int(datetime.now().timestamp())
-    active_users = [u for u in users if u.get('last_miner_claim', 0) > now - 86400]
-    
-    await message.answer(
-        f"📊 <b>آمار کامل ربات</b>\n\n"
-        f"👥 <b>کاربران:</b>\n"
-        f"• مجموع کاربران: {len(users):,}\n"
-        f"• کاربران فعال (24h): {len(active_users):,}\n\n"
-        f"💰 <b>اقتصاد بازی:</b>\n"
-        f"• مجموع سکه‌ها: {total_coins:,}\n"
-        f"• مجموع جم‌ها: {total_gems:,}\n"
-        f"• مجموع ZP: {total_zp:,}\n\n"
-        f"🏦 <b>آمار سرور:</b>\n"
-        f"• کل سکه تولید شده: {stats.get('total_coins', 0):,}\n"
-        f"• کل جم تولید شده: {stats.get('total_gems', 0):,}\n"
-        f"• کل ZP تولید شده: {stats.get('total_zp', 0):,}\n\n"
-        f"🕒 آخرین بروزرسانی: {datetime.fromtimestamp(stats.get('last_updated', now)).strftime('%Y-%m-%d %H:%M:%S')}",
-        parse_mode=ParseMode.HTML
-    )
-
 @dp.message(F.text == "💰 +سکه")
 async def add_coins_handler(message: types.Message, state: FSMContext):
     """افزودن سکه به کاربر"""
