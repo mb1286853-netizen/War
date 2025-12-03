@@ -1,8 +1,7 @@
 import os
 import asyncio
 import sqlite3
-import random
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command, CommandObject
@@ -34,28 +33,6 @@ dp = Dispatcher()
 
 # ==================== داده‌های بازی ====================
 
-MISSILES = {
-    "موشک ۱ تنی": {"damage": 50, "price": 200, "min_level": 1},
-    "موشک ۵ تنی": {"damage": 70, "price": 500, "min_level": 2},
-    "موشک ۱۰ تنی": {"damage": 90, "price": 1000, "min_level": 3},
-    "موشک ۲۰ تنی": {"damage": 110, "price": 2000, "min_level": 4},
-    "موشک ۵۰ تنی": {"damage": 130, "price": 5000, "min_level": 5},
-}
-
-FIGHTERS = {
-    "F-16 Falcon": {"bonus": 80, "price": 5000, "min_level": 3},
-    "F-22 Raptor": {"bonus": 150, "price": 12000, "min_level": 6},
-    "Su-57 Felon": {"bonus": 220, "price": 25000, "min_level": 9},
-    "B-2 Spirit": {"bonus": 300, "price": 50000, "min_level": 12},
-}
-
-DRONES = {
-    "MQ-9 Reaper": {"bonus": 100, "price": 8000, "min_level": 4},
-    "RQ-4 Global Hawk": {"bonus": 180, "price": 18000, "min_level": 7},
-    "X-47B": {"bonus": 250, "price": 35000, "min_level": 10},
-    "Avenger": {"bonus": 350, "price": 60000, "min_level": 13},
-}
-
 MINER_LEVELS = {
     1: {"zp_per_hour": 100, "upgrade_cost": 100, "name": "ماینر پایه"},
     2: {"zp_per_hour": 200, "upgrade_cost": 200, "name": "ماینر متوسط"},
@@ -77,7 +54,6 @@ MINER_LEVELS = {
 # ==================== کیبوردها ====================
 
 def user_keyboard():
-    """کیبورد کاربران عادی"""
     keyboard = [
         [KeyboardButton(text="👤 پروفایل")],
         [KeyboardButton(text="🛒 فروشگاه"), KeyboardButton(text="💥 حمله")],
@@ -86,7 +62,6 @@ def user_keyboard():
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
 def admin_keyboard():
-    """کیبورد ادمین"""
     keyboard = [
         [KeyboardButton(text="👑 پنل ادمین"), KeyboardButton(text="📊 آمار کامل")],
         [KeyboardButton(text="📣 پیام همگانی"), KeyboardButton(text="🎁 هدیه همگانی")],
@@ -96,16 +71,14 @@ def admin_keyboard():
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
 def shop_keyboard():
-    """کیبورد فروشگاه"""
     keyboard = [
-        [KeyboardButton(text="💣 موشک‌ها"), KeyboardButton(text="🚁 جنگنده‌ها")],
-        [KeyboardButton(text="🛸 پهپادها"), KeyboardButton(text="🛡️ پدافند")],
+        [KeyboardButton(text="💣 موشک‌ها")],
+        [KeyboardButton(text="🚁 جنگنده‌ها"), KeyboardButton(text="🛸 پهپادها")],
         [KeyboardButton(text="🎁 باکس‌ها"), KeyboardButton(text="🔙 بازگشت")]
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
 def back_keyboard():
-    """کیبورد بازگشت"""
     keyboard = [[KeyboardButton(text="🔙 بازگشت")]]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
@@ -120,7 +93,6 @@ def init_db():
     conn = get_connection()
     c = conn.cursor()
     
-    # جدول کاربران
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -137,27 +109,6 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
-    # جدول موشک‌های کاربر
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS user_missiles (
-            user_id INTEGER,
-            missile_name TEXT,
-            quantity INTEGER DEFAULT 0,
-            PRIMARY KEY (user_id, missile_name)
-        )
-    ''')
-    
-    # جدول آمار ربات
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS bot_stats (
-            total_users INTEGER DEFAULT 0,
-            total_coins BIGINT DEFAULT 0,
-            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    c.execute('INSERT OR IGNORE INTO bot_stats (total_users, total_coins) VALUES (0, 0)')
     
     conn.commit()
     conn.close()
@@ -188,9 +139,6 @@ def create_user(user_id: int, username: str, full_name: str):
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (user_id, username, full_name, coins, gems, is_admin))
         
-        # آپدیت آمار
-        c.execute('UPDATE bot_stats SET total_users = total_users + 1')
-        
         conn.commit()
         print(f"✅ کاربر جدید: {user_id}")
     
@@ -211,13 +159,7 @@ async def start_command(message: types.Message):
     init_db()
     create_user(user_id, username, full_name)
     
-    welcome_text = (
-        "🚀 **به WarZone خوش آمدید!**\n\n"
-        "🪐 ربات بازی جنگی پیشرفته\n"
-        "✅ همیشه آنلاین 24/7\n"
-        "✅ سیستم کامل بازی\n\n"
-        "👇 از کیبورد زیر استفاده کنید:"
-    )
+    welcome_text = "🚀 **به WarZone خوش آمدید!**\n\n🪐 ربات بازی جنگی پیشرفته"
     
     if is_admin(user_id):
         await message.answer(welcome_text, reply_markup=admin_keyboard())
@@ -259,7 +201,6 @@ async def shop_handler(message: types.Message):
         "• 💣 موشک‌ها (آسیب مستقیم)\n"
         "• 🚁 جنگنده‌ها (تقویت حمله)\n"
         "• 🛸 پهپادها (پشتیبانی)\n"
-        "• 🛡️ پدافند (سیستم دفاعی)\n"
         "• 🎁 باکس‌ها (شانسی)\n\n"
         "👇 دسته مورد نظر را انتخاب کنید:"
     )
@@ -268,52 +209,41 @@ async def shop_handler(message: types.Message):
 
 @dp.message(F.text == "💣 موشک‌ها")
 async def missiles_handler(message: types.Message):
-    user = get_user(message.from_user.id)
-    if not user:
-        return
-    
-    text = "💣 **موشک‌ها**\n\n"
-    
-    for name, info in MISSILES.items():
-        if user['level'] >= info['min_level']:
-            text += f"• **{name}**\n"
-            text += f"  ⚔️ آسیب: {info['damage']}\n"
-            text += f"  💰 قیمت: {info['price']:,} سکه\n"
-            text += f"  🆙 نیاز به سطح: {info['min_level']}\n\n"
+    text = (
+        "💣 **موشک‌ها**\n\n"
+        "• موشک ۱ تنی - ۵۰ damage - ۲۰۰ سکه\n"
+        "• موشک ۵ تنی - ۷۰ damage - ۵۰۰ سکه\n"
+        "• موشک ۱۰ تنی - ۹۰ damage - ۱,۰۰۰ سکه\n"
+        "• موشک ۲۰ تنی - ۱۱۰ damage - ۲,۰۰۰ سکه\n"
+        "• موشک ۵۰ تنی - ۱۳۰ damage - ۵,۰۰۰ سکه\n\n"
+        "برای خرید: `/buy موشک ۱ تنی`"
+    )
     
     await message.answer(text, reply_markup=back_keyboard())
 
 @dp.message(F.text == "🚁 جنگنده‌ها")
 async def fighters_handler(message: types.Message):
-    user = get_user(message.from_user.id)
-    if not user:
-        return
-    
-    text = "🚁 **جنگنده‌ها**\n\n"
-    
-    for name, info in FIGHTERS.items():
-        if user['level'] >= info['min_level']:
-            text += f"• **{name}**\n"
-            text += f"  ✨ تقویت: +{info['bonus']} آسیب\n"
-            text += f"  💰 قیمت: {info['price']:,} سکه\n"
-            text += f"  🆙 نیاز به سطح: {info['min_level']}\n\n"
+    text = (
+        "🚁 **جنگنده‌ها**\n\n"
+        "• F-16 Falcon - +80 damage - 5,000 سکه\n"
+        "• F-22 Raptor - +150 damage - 12,000 سکه\n"
+        "• Su-57 Felon - +220 damage - 25,000 سکه\n"
+        "• B-2 Spirit - +300 damage - 50,000 سکه\n\n"
+        "برای خرید: `/buy F-16 Falcon`"
+    )
     
     await message.answer(text, reply_markup=back_keyboard())
 
 @dp.message(F.text == "🛸 پهپادها")
 async def drones_handler(message: types.Message):
-    user = get_user(message.from_user.id)
-    if not user:
-        return
-    
-    text = "🛸 **پهپادها**\n\n"
-    
-    for name, info in DRONES.items():
-        if user['level'] >= info['min_level']:
-            text += f"• **{name}**\n"
-            text += f"  ✨ تقویت: +{info['bonus']} آسیب\n"
-            text += f"  💰 قیمت: {info['price']:,} سکه\n"
-            text += f"  🆙 نیاز به سطح: {info['min_level']}\n\n"
+    text = (
+        "🛸 **پهپادها**\n\n"
+        "• MQ-9 Reaper - +100 damage - 8,000 سکه\n"
+        "• RQ-4 Global Hawk - +180 damage - 18,000 سکه\n"
+        "• X-47B - +250 damage - 35,000 سکه\n"
+        "• Avenger - +350 damage - 60,000 سکه\n\n"
+        "برای خرید: `/buy MQ-9 Reaper`"
+    )
     
     await message.answer(text, reply_markup=back_keyboard())
 
@@ -327,30 +257,18 @@ async def miner_handler(message: types.Message):
     
     miner_level = user['miner_level']
     miner_info = MINER_LEVELS[miner_level]
-    last_claim = user['last_miner_claim']
-    
-    # محاسبه ZP انباشته
-    accumulated_zp = 0
-    if last_claim:
-        try:
-            last_claim_time = datetime.fromisoformat(last_claim)
-            now = datetime.now()
-            hours_passed = (now - last_claim_time).total_seconds() / 3600
-            accumulated_zp = min(hours_passed * miner_info["zp_per_hour"], miner_info["zp_per_hour"] * 24)
-        except:
-            pass
     
     text = (
         f"⛏️ **ماینر ZP**\n\n"
         f"🔄 **سطح:** {miner_level} ({miner_info['name']})\n"
         f"📊 **تولید:** {miner_info['zp_per_hour']:,} ZP/ساعت\n"
         f"💳 **موجودی ZP:** {user['zone_point']:,}\n"
-        f"📈 **انباشته:** {int(accumulated_zp):,} ZP\n"
     )
     
     if miner_level < 15:
         upgrade_cost = miner_info['upgrade_cost']
-        text += f"\n💰 **ارتقا به سطح {miner_level + 1}:** {upgrade_cost:,} ZP"
+        text += f"\n💰 **ارتقا به سطح {miner_level + 1}:** {upgrade_cost:,} ZP\n"
+        text += f"برای ارتقا: `/upgrademiner`"
     
     await message.answer(text, reply_markup=back_keyboard())
 
@@ -363,9 +281,7 @@ async def boxes_handler(message: types.Message):
         "• 🔵 باکس ZP (1000 ZP)\n"
         "• 🟡 باکس ویژه (10 جم)\n"
         "• 🔴 باکس افسانه‌ای (50 جم)\n\n"
-        "👇 برای خرید دستور زیر را وارد کنید:\n"
-        "`/buybox [نوع باکس]`\n\n"
-        "مثال: `/buybox coin`"
+        "برای خرید: `/buybox coin`"
     )
     
     await message.answer(text, reply_markup=back_keyboard())
@@ -375,12 +291,10 @@ async def attack_handler(message: types.Message):
     text = (
         "💥 **سیستم حمله**\n\n"
         "**انواع حمله:**\n"
-        "• ⚔️ حمله تکی (یک موشک)\n"
-        "• 🧩 حمله ترکیبی ۱ (۲ موشک + ۱ جنگنده + ۱ پهپاد)\n"
-        "• 🧩 حمله ترکیبی ۲ (۳ موشک + ۲ جنگنده)\n"
-        "• 🧩 حمله ترکیبی ۳ (۴ موشک + ۱ جنگنده + ۲ پهپاد)\n\n"
-        "👇 برای حمله دستور زیر را وارد کنید:\n"
-        "`/attack [نوع] [هدف]`\n\n"
+        "• حمله تکی: `/attack single @username`\n"
+        "• حمله ترکیبی ۱: `/attack combo1 @username`\n"
+        "• حمله ترکیبی ۲: `/attack combo2 @username`\n"
+        "• حمله ترکیبی ۳: `/attack combo3 @username`\n\n"
         "مثال: `/attack single 123456789`"
     )
     
@@ -394,17 +308,8 @@ async def admin_panel_handler(message: types.Message):
         await message.answer("❌ شما ادمین نیستید!")
         return
     
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute('SELECT total_users, total_coins FROM bot_stats')
-    stats = c.fetchone()
-    conn.close()
-    
     admin_text = (
         "👑 **پنل ادمین WarZone**\n\n"
-        f"👥 **کل کاربران:** {stats['total_users']}\n"
-        f"💰 **کل سکه‌ها:** {stats['total_coins']:,}\n"
-        f"🕐 **زمان:** {datetime.now().strftime('%H:%M')}\n\n"
         "**دستورات سریع:**\n"
         "• `/addcoin 123456789 50000`\n"
         "• `/addgem 123456789 50`\n"
@@ -425,22 +330,13 @@ async def full_stats_handler(message: types.Message):
     
     conn = get_connection()
     c = conn.cursor()
-    
-    # آمار کاربران
-    c.execute('SELECT COUNT(*) as total, SUM(zone_coin) as total_coins FROM users')
-    stats = c.fetchone()
-    
-    # کاربران امروز
-    c.execute('SELECT COUNT(*) FROM users WHERE date(created_at) = date("now")')
-    new_today = c.fetchone()[0]
-    
+    c.execute('SELECT COUNT(*) FROM users')
+    total = c.fetchone()[0]
     conn.close()
     
     stats_text = (
         "📊 **آمار کامل ربات**\n\n"
-        f"👥 **کل کاربران:** {stats['total']}\n"
-        f"🆕 **کاربران امروز:** {new_today}\n"
-        f"💰 **کل سکه‌ها:** {stats['total_coins']:,}\n"
+        f"👥 **کل کاربران:** {total}\n"
         f"🕐 **زمان سرور:** {datetime.now().strftime('%H:%M')}\n"
         f"✅ **وضعیت:** آنلاین"
     )
@@ -470,8 +366,7 @@ async def giftall_button(message: types.Message):
         "برای دادن هدیه به همه:\n"
         "`/giftall سکه جم zp`\n\n"
         "مثال:\n"
-        "`/giftall 1000 5 100`\n"
-        "این دستور 1000 سکه، 5 جم و 100 ZP به همه می‌دهد."
+        "`/giftall 1000 5 100`"
     )
 
 @dp.message(F.text == "💰 +سکه")
@@ -552,27 +447,13 @@ async def addcoin_command(message: types.Message, command: CommandObject):
         conn = get_connection()
         c = conn.cursor()
         c.execute('UPDATE users SET zone_coin = zone_coin + ? WHERE user_id = ?', (amount, user_id))
-        
-        # آپدیت آمار
-        c.execute('UPDATE bot_stats SET total_coins = total_coins + ?', (amount,))
-        
         conn.commit()
         conn.close()
         
         await message.answer(f"✅ {amount:,} سکه به کاربر {user_id} اضافه شد.")
         
-        # اطلاع به کاربر
-        try:
-            await bot.send_message(
-                user_id,
-                f"🎉 **هدیه از ادمین!**\n\n"
-                f"💰 **{amount:,} سکه** دریافت کردید!"
-            )
-        except:
-            pass
-            
     except:
-        await message.answer("❌ خطا! فرمت درست: `/addcoin 123456789 50000`")
+        await message.answer("❌ خطا!")
 
 @dp.message(Command("addgem"))
 async def addgem_command(message: types.Message, command: CommandObject):
@@ -596,18 +477,132 @@ async def addgem_command(message: types.Message, command: CommandObject):
         
         await message.answer(f"✅ {amount} جم به کاربر {user_id} اضافه شد.")
         
-        try:
-            await bot.send_message(
-                user_id,
-                f"💎 **هدیه از ادمین!**\n\n"
-                f"✨ **{amount} جم** دریافت کردید!"
-            )
-        except:
-            pass
-            
     except:
-        await message.answer("❌ خطا! فرمت درست: `/addgem 123456789 50`")
+        await message.answer("❌ خطا!")
 
 @dp.message(Command("addzp"))
 async def addzp_command(message: types.Message, command: CommandObject):
-    if not is_admin(me)
+    if not is_admin(message.from_user.id):
+        return
+    
+    args = command.args.split() if command.args else []
+    if len(args) != 2:
+        await message.answer("⚠️ فرمت: `/addzp آیدی مقدار`")
+        return
+    
+    try:
+        user_id = int(args[0])
+        amount = int(args[1])
+        
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute('UPDATE users SET zone_point = zone_point + ? WHERE user_id = ?', (amount, user_id))
+        conn.commit()
+        conn.close()
+        
+        await message.answer(f"✅ {amount:,} ZP به کاربر {user_id} اضافه شد.")
+        
+    except:
+        await message.answer("❌ خطا!")
+
+@dp.message(Command("setlevel"))
+async def setlevel_command(message: types.Message, command: CommandObject):
+    if not is_admin(message.from_user.id):
+        return
+    
+    args = command.args.split() if command.args else []
+    if len(args) != 2:
+        await message.answer("⚠️ فرمت: `/setlevel آیدی سطح`")
+        return
+    
+    try:
+        user_id = int(args[0])
+        level = int(args[1])
+        
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute('UPDATE users SET level = ? WHERE user_id = ?', (level, user_id))
+        conn.commit()
+        conn.close()
+        
+        await message.answer(f"✅ سطح کاربر {user_id} به {level} تغییر یافت.")
+        
+    except:
+        await message.answer("❌ خطا!")
+
+@dp.message(Command("giftall"))
+async def giftall_command(message: types.Message, command: CommandObject):
+    if not is_admin(message.from_user.id):
+        return
+    
+    args = command.args.split() if command.args else []
+    if len(args) < 1:
+        await message.answer("⚠️ فرمت: `/giftall سکه [جم] [zp]`")
+        return
+    
+    try:
+        coins = int(args[0])
+        gems = int(args[1]) if len(args) > 1 else 0
+        zp = int(args[2]) if len(args) > 2 else 0
+        
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute('UPDATE users SET zone_coin = zone_coin + ?, zone_gem = zone_gem + ?, zone_point = zone_point + ?',
+                 (coins, gems, zp))
+        conn.commit()
+        conn.close()
+        
+        await message.answer(f"✅ هدیه به همه ارسال شد!")
+        
+    except:
+        await message.answer("❌ خطا!")
+
+@dp.message(Command("broadcast"))
+async def broadcast_command(message: types.Message, command: CommandObject):
+    if not is_admin(message.from_user.id):
+        return
+    
+    if not command.args:
+        await message.answer("⚠️ فرمت: `/broadcast متن پیام`")
+        return
+    
+    text = command.args
+    await message.answer(f"📣 پیام همگانی:\n\n{text}")
+
+# ==================== وب سرور ====================
+
+async def health_handler(request):
+    return web.Response(text='Bot is running!')
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get('/', health_handler)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', PORT)
+    await site.start()
+    print(f"🌐 Web server started on port {PORT}")
+    return runner
+
+# ==================== اجرای اصلی ====================
+
+async def main():
+    print("🚀 Starting WarZone Bot...")
+    
+    web_runner = await start_web_server()
+    
+    try:
+        print("🤖 Bot is running...")
+        await dp.start_polling(bot, skip_updates=True)
+    except Exception as e:
+        print(f"❌ Error in bot: {e}")
+    finally:
+        await web_runner.cleanup()
+
+if __name__ == '__main__':
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("👋 Bot stopped by user")
+    except Exception as e:
+        print(f"❌ Fatal error: {e}")
