@@ -117,7 +117,8 @@ def back_keyboard():
     """کیبورد بازگشت"""
     keyboard = [[KeyboardButton(text="🔙 بازگشت")]]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
-    # ==================== حالت‌های FSM ====================
+
+# ==================== حالت‌های FSM ====================
 class BroadcastStates(StatesGroup):
     waiting_for_message = State()
     waiting_for_confirmation = State()
@@ -189,6 +190,7 @@ BOXES = {
     "افسانه‌ای": {"name": "باکس افسانه‌ای", "price_gem": 10, "reward_type": "all", "chance": 0.1},
     "رایگان": {"name": "باکس رایگان", "price": 0, "reward_type": "random", "min": 10, "max": 100},
 }
+
 # ==================== دیتابیس ====================
 class Database:
     _instance = None
@@ -320,6 +322,7 @@ class Database:
             self.conn.close()
 
 db = Database()
+
 # ==================== توابع کمکی دیتابیس ====================
 def get_user(user_id: int):
     try:
@@ -429,6 +432,7 @@ def update_user_zp(user_id: int, amount: int):
     except Exception as e:
         logger.error(f"Error updating ZP for {user_id}: {e}")
         return False
+
 # ==================== هندلرهای اصلی ====================
 
 @dp.message(Command("start"))
@@ -506,6 +510,7 @@ async def shop_handler(message: types.Message):
         parse_mode=ParseMode.HTML,
         reply_markup=shop_keyboard()
     )
+
 @dp.message(F.text == "💣 موشک‌ها")
 async def missiles_shop(message: types.Message):
     """فروشگاه موشک‌ها"""
@@ -544,8 +549,7 @@ async def drones_shop(message: types.Message):
         f"🛸 <b>فروشگاه پهپادها</b>{items_text}",
         parse_mode=ParseMode.HTML,
         reply_markup=back_keyboard()
-    )
-
+)
 @dp.message(F.text == "🛡️ سیستم دفاعی")
 async def defense_shop(message: types.Message):
     """فروشگاه سیستم دفاعی"""
@@ -580,7 +584,8 @@ async def attack_handler(message: types.Message):
         parse_mode=ParseMode.HTML,
         reply_markup=attack_keyboard()
     )
-    @dp.message(F.text == "🛡️ دفاع")
+
+@dp.message(F.text == "🛡️ دفاع")
 async def defense_handler(message: types.Message):
     """منوی دفاع"""
     user = get_user(message.from_user.id)
@@ -663,7 +668,8 @@ async def contact_admin(message: types.Message):
         parse_mode=ParseMode.HTML,
         reply_markup=back_keyboard()
     )
-    @dp.message(F.text == "⚠️ گزارش مشکل")
+
+@dp.message(F.text == "⚠️ گزارش مشکل")
 async def report_problem(message: types.Message, state: FSMContext):
     """گزارش مشکل"""
     await message.answer(
@@ -748,7 +754,8 @@ async def help_guide(message: types.Message):
         parse_mode=ParseMode.HTML,
         reply_markup=support_keyboard()
     )
-    @dp.message(F.text == "⛏️ ماینر ZP")
+
+@dp.message(F.text == "⛏️ ماینر ZP")
 async def miner_handler(message: types.Message):
     """سیستم ماینر"""
     user = get_user(message.from_user.id)
@@ -842,9 +849,12 @@ async def back_handler(message: types.Message):
         parse_mode=ParseMode.HTML,
         reply_markup=keyboard
     )
-    # ==================== سیستم Keep-Alive ====================
+
+# ==================== سیستم Keep-Alive ====================
 async def keep_alive_ping():
+    """پینگ دوره‌ی به سرور برای جلوگیری از خوابیدن"""
     if not KEEP_ALIVE_URL:
+        logger.warning("⚠️ KEEP_ALIVE_URL تنظیم نشده - سیستم keep-alive غیرفعال")
         return
     
     try:
@@ -852,15 +862,19 @@ async def keep_alive_ping():
             async with session.get(KEEP_ALIVE_URL) as response:
                 if response.status == 200:
                     logger.info("✅ Keep-alive ping successful")
+                else:
+                    logger.warning(f"⚠️ Keep-alive failed: {response.status}")
     except Exception as e:
         logger.error(f"❌ Keep-alive error: {e}")
 
 async def start_keep_alive():
+    """شروع پینگ دوره‌ای هر 5 دقیقه"""
     while True:
         await asyncio.sleep(300)  # هر 5 دقیقه
         await keep_alive_ping()
 
 async def web_server():
+    """وب سرور ساده برای keep-alive"""
     async def handle(request):
         return web.Response(text='Bot is alive!')
     
@@ -874,24 +888,31 @@ async def web_server():
 
 # ==================== تابع اصلی ====================
 async def main():
+    """تابع اصلی اجرای ربات"""
     try:
+        # راه‌اندازی دیتابیس
         db.init()
         
+        # شروع وب سرور برای keep-alive
         asyncio.create_task(web_server())
         
+        # شروع پینگ دوره‌ای keep-alive
         if KEEP_ALIVE_URL:
             asyncio.create_task(start_keep_alive())
             logger.info("🚀 سیستم keep-alive فعال شد")
         
+        # پاک کردن webhook و شروع polling
         await bot.delete_webhook(drop_pending_updates=True)
         
         logger.info("🤖 ربات Warzone شروع به کار کرد...")
         
+        # شروع dispatcher
         await dp.start_polling(bot)
         
     except Exception as e:
         logger.error(f"❌ خطای اصلی: {e}")
     finally:
+        # بستن اتصالات
         db.close()
         await bot.session.close()
 
