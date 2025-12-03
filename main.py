@@ -610,4 +610,4 @@ async def addgem_command(message: types.Message, command: CommandObject):
 
 @dp.message(Command("addzp"))
 async def addzp_command(message: types.Message, command: CommandObject):
-    if not is_admin(me
+    if not is_admin(me)
