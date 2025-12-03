@@ -3,13 +3,12 @@ import asyncio
 import sqlite3
 import random
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command, CommandObject
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.enums import ParseMode
-from aiogram.client.default import DefaultBotProperties  # <-- اضافه کن
+from aiogram.client.default import DefaultBotProperties
 from aiohttp import web
 from dotenv import load_dotenv
 
@@ -24,7 +23,11 @@ if not BOT_TOKEN:
     print("❌ خطا: BOT_TOKEN تنظیم نشده!")
     exit(1)
 
-# ✅ اصلاح خطا: استفاده از DefaultBotProperties
+# ✅ تعریف DB_PATH قبل از استفاده
+DB_PATH = '/app/data/warzone.db'
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
+# ✅ ساخت bot با روش جدید
 bot = Bot(
     token=BOT_TOKEN,
     default=DefaultBotProperties(parse_mode=ParseMode.HTML)
@@ -94,14 +97,14 @@ def admin_keyboard():
 
 # ==================== دیتابیس ====================
 
-DB_PATH = '/app/data/warzone.db'
-
 def get_connection():
+    """اتصال به دیتابیس"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
+    """راه‌اندازی دیتابیس"""
     conn = get_connection()
     c = conn.cursor()
     
@@ -127,6 +130,7 @@ def init_db():
     print("✅ دیتابیس راه‌اندازی شد")
 
 def get_user(user_id: int):
+    """دریافت اطلاعات کاربر"""
     conn = get_connection()
     c = conn.cursor()
     c.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
@@ -135,6 +139,7 @@ def get_user(user_id: int):
     return dict(user) if user else None
 
 def create_user(user_id: int, username: str, full_name: str):
+    """ایجاد کاربر جدید"""
     conn = get_connection()
     c = conn.cursor()
     
@@ -157,6 +162,7 @@ def create_user(user_id: int, username: str, full_name: str):
     conn.close()
 
 def update_user_coins(user_id: int, amount: int):
+    """به‌روزرسانی سکه کاربر"""
     conn = get_connection()
     c = conn.cursor()
     c.execute('UPDATE users SET zone_coin = zone_coin + ? WHERE user_id = ?', (amount, user_id))
@@ -164,6 +170,7 @@ def update_user_coins(user_id: int, amount: int):
     conn.close()
 
 def update_user_gems(user_id: int, amount: int):
+    """به‌روزرسانی جم کاربر"""
     conn = get_connection()
     c = conn.cursor()
     c.execute('UPDATE users SET zone_gem = zone_gem + ? WHERE user_id = ?', (amount, user_id))
@@ -171,6 +178,7 @@ def update_user_gems(user_id: int, amount: int):
     conn.close()
 
 def update_user_zp(user_id: int, amount: int):
+    """به‌روزرسانی ZP کاربر"""
     conn = get_connection()
     c = conn.cursor()
     c.execute('UPDATE users SET zone_point = zone_point + ? WHERE user_id = ?', (amount, user_id))
@@ -178,13 +186,38 @@ def update_user_zp(user_id: int, amount: int):
     conn.close()
 
 def is_admin(user_id: int) -> bool:
+    """چک کردن ادمین بودن"""
     user = get_user(user_id)
     return user and (user['is_admin'] == 1 or user_id in ADMIN_IDS)
+
+# ==================== توابع ماینر ====================
+
+def calculate_zp_accumulated(user_id: int, miner_level: int, last_claim_time: str) -> int:
+    """محاسبه ZP انباشته شده"""
+    if not last_claim_time:
+        return 0
+    
+    miner_info = MINER_LEVELS.get(miner_level, MINER_LEVELS[1])
+    zp_per_hour = miner_info["zp_per_hour"]
+    
+    try:
+        last_claim = datetime.fromisoformat(last_claim_time)
+    except:
+        return 0
+    
+    now = datetime.now()
+    hours_passed = (now - last_claim).total_seconds() / 3600
+    
+    accumulated = hours_passed * zp_per_hour
+    max_capacity = zp_per_hour * 24  # حداکثر 24 ساعت ذخیره
+    
+    return int(min(accumulated, max_capacity))
 
 # ==================== دستورات اصلی ====================
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
+    """دستور شروع ربات"""
     user_id = message.from_user.id
     username = message.from_user.username or ""
     full_name = message.from_user.full_name
@@ -192,79 +225,141 @@ async def start_command(message: types.Message):
     init_db()
     create_user(user_id, username, full_name)
     
+    welcome_text = "🚀 **به WarZone خوش آمدید!**\n\n🪐 ربات بازی جنگی پیشرفته"
+    
     if is_admin(user_id):
-        await message.answer("👑 به پنل ادمین خوش آمدید!", reply_markup=admin_keyboard())
+        await message.answer(welcome_text, reply_markup=admin_keyboard())
     else:
-        await message.answer("🚀 به WarZone خوش آمدید!", reply_markup=user_keyboard())
+        await message.answer(welcome_text, reply_markup=user_keyboard())
 
 @dp.message(F.text == "👤 پروفایل")
 async def profile_handler(message: types.Message):
+    """نمایش پروفایل"""
     user = get_user(message.from_user.id)
+    
     if not user:
-        await message.answer("❌ کاربر یافت نشد!")
+        await message.answer("❌ کاربر یافت نشد! /start بزنید")
         return
     
     admin_badge = "👑 " if user['is_admin'] == 1 else ""
     coins = "∞" if user['is_admin'] == 1 else f"{user['zone_coin']:,}"
     gems = "∞" if user['is_admin'] == 1 else f"{user['zone_gem']}"
     
-    text = (
-        f"{admin_badge}**پروفایل**\n\n"
-        f"💰 سکه: {coins}\n"
-        f"💎 جم: {gems}\n"
-        f"🪙 ZP: {user['zone_point']:,}\n"
-        f"🆙 سطح: {user['level']}\n"
-        f"⭐ XP: {user['xp']:,}\n"
-        f"⛏️ ماینر: سطح {user['miner_level']}"
+    profile_text = (
+        f"{admin_badge}**پروفایل کاربری**\n\n"
+        f"👤 **نام:** {user['full_name']}\n"
+        f"🆔 **آیدی:** `{user['user_id']}`\n"
+        f"💰 **سکه:** {coins}\n"
+        f"💎 **جم:** {gems}\n"
+        f"🪙 **ZP:** {user['zone_point']:,}\n"
+        f"⭐ **XP:** {user['xp']:,}\n"
+        f"🆙 **سطح:** {user['level']}\n"
+        f"⛏️ **ماینر:** سطح {user['miner_level']}\n"
+        f"📅 **عضویت:** {user['created_at'][:10]}"
     )
-    await message.answer(text)
+    
+    await message.answer(profile_text)
 
 @dp.message(F.text == "⛏️ ماینر ZP")
 async def miner_handler(message: types.Message):
+    """مدیریت ماینر"""
+    user = get_user(message.from_user.id)
+    
+    if not user:
+        await message.answer("❌ کاربر یافت نشد!")
+        return
+    
+    miner_level = user['miner_level']
+    miner_info = MINER_LEVELS[miner_level]
+    last_claim = user['last_miner_claim']
+    
+    accumulated_zp = calculate_zp_accumulated(
+        message.from_user.id,
+        miner_level,
+        last_claim
+    )
+    
+    text = (
+        f"⛏️ **ماینر ZP**\n\n"
+        f"🔄 **سطح:** {miner_level} ({miner_info['name']})\n"
+        f"📊 **تولید:** {miner_info['zp_per_hour']:,} ZP/ساعت\n"
+        f"💳 **موجودی ZP:** {user['zone_point']:,}\n"
+        f"📈 **انباشته:** {accumulated_zp:,} ZP\n"
+    )
+    
+    if miner_level < 15:
+        upgrade_cost = miner_info['upgrade_cost']
+        text += f"\n💰 **ارتقا به سطح {miner_level + 1}:** {upgrade_cost:,} ZP"
+    
+    await message.answer(text)
+
+@dp.message(F.text.contains("برداشت"))
+async def miner_claim_handler(message: types.Message):
+    """برداشت ZP از ماینر"""
     user = get_user(message.from_user.id)
     if not user:
         return
     
     miner_level = user['miner_level']
-    miner_info = MINER_LEVELS[miner_level]
+    last_claim = user['last_miner_claim']
     
-    text = (
-        f"⛏️ **ماینر سطح {miner_level}**\n\n"
-        f"📊 تولید: {miner_info['zp_per_hour']:,} ZP/ساعت\n"
-        f"💳 موجودی: {user['zone_point']:,} ZP\n"
-        f"💰 ارتقا: {miner_info['upgrade_cost']:,} ZP"
+    accumulated_zp = calculate_zp_accumulated(
+        message.from_user.id,
+        miner_level,
+        last_claim
     )
     
-    await message.answer(text)
+    if accumulated_zp < 100:
+        await message.answer("❌ حداقل 100 ZP برای برداشت نیاز است!")
+        return
+    
+    # بروزرسانی
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        'UPDATE users SET zone_point = zone_point + ?, last_miner_claim = ? WHERE user_id = ?',
+        (accumulated_zp, datetime.now().isoformat(), message.from_user.id)
+    )
+    conn.commit()
+    conn.close()
+    
+    await message.answer(
+        f"✅ **{accumulated_zp:,} ZP** برداشت شد!\n"
+        f"💰 موجودی جدید: {user['zone_point'] + accumulated_zp:,} ZP"
+    )
 
 @dp.message(F.text == "👑 پنل ادمین")
 async def admin_panel_handler(message: types.Message):
+    """پنل ادمین"""
     if not is_admin(message.from_user.id):
         await message.answer("❌ شما ادمین نیستید!")
         return
     
-    await message.answer(
-        "👑 **پنل ادمین**\n\n"
-        "دستورات:\n"
-        "• /addcoin آیدی مقدار\n"
-        "• /addgem آیدی مقدار\n"
-        "• /addzp آیدی مقدار\n"
-        "• /setlevel آیدی سطح\n"
-        "• /giftall سکه جم zp\n"
-        "• /broadcast متن",
-        reply_markup=admin_keyboard()
+    admin_text = (
+        "👑 **پنل ادمین WarZone**\n\n"
+        "**دستورات سریع:**\n"
+        "• `/addcoin آیدی مقدار`\n"
+        "• `/addgem آیدی مقدار`\n"
+        "• `/addzp آیدی مقدار`\n"
+        "• `/setlevel آیدی سطح`\n"
+        "• `/giftall سکه جم zp`\n"
+        "• `/broadcast متن`\n\n"
+        "👇 از دکمه‌های زیر استفاده کنید"
     )
+    
+    await message.answer(admin_text, reply_markup=admin_keyboard())
 
 # ==================== دستورات ادمین ====================
 
 @dp.message(Command("addcoin"))
 async def addcoin_command(message: types.Message, command: CommandObject):
+    """اضافه کردن سکه"""
     if not is_admin(message.from_user.id):
         return
     
     args = command.args.split() if command.args else []
     if len(args) != 2:
-        await message.answer("⚠️ فرمت: /addcoin آیدی مقدار")
+        await message.answer("⚠️ فرمت: `/addcoin آیدی مقدار`")
         return
     
     try:
@@ -274,17 +369,27 @@ async def addcoin_command(message: types.Message, command: CommandObject):
         update_user_coins(user_id, amount)
         await message.answer(f"✅ {amount:,} سکه به کاربر {user_id} اضافه شد.")
         
+        try:
+            await bot.send_message(
+                user_id,
+                f"🎉 **هدیه از ادمین!**\n\n"
+                f"💰 **{amount:,} سکه** دریافت کردید!"
+            )
+        except:
+            pass
+            
     except:
-        await message.answer("❌ خطا!")
+        await message.answer("❌ خطا! فرمت درست: `/addcoin 123456789 50000`")
 
 @dp.message(Command("addgem"))
 async def addgem_command(message: types.Message, command: CommandObject):
+    """اضافه کردن جم"""
     if not is_admin(message.from_user.id):
         return
     
     args = command.args.split() if command.args else []
     if len(args) != 2:
-        await message.answer("⚠️ فرمت: /addgem آیدی مقدار")
+        await message.answer("⚠️ فرمت: `/addgem آیدی مقدار`")
         return
     
     try:
@@ -294,17 +399,27 @@ async def addgem_command(message: types.Message, command: CommandObject):
         update_user_gems(user_id, amount)
         await message.answer(f"✅ {amount} جم به کاربر {user_id} اضافه شد.")
         
+        try:
+            await bot.send_message(
+                user_id,
+                f"💎 **هدیه از ادمین!**\n\n"
+                f"✨ **{amount} جم** دریافت کردید!"
+            )
+        except:
+            pass
+            
     except:
-        await message.answer("❌ خطا!")
+        await message.answer("❌ خطا! فرمت درست: `/addgem 123456789 50`")
 
 @dp.message(Command("addzp"))
 async def addzp_command(message: types.Message, command: CommandObject):
+    """اضافه کردن ZP"""
     if not is_admin(message.from_user.id):
         return
     
     args = command.args.split() if command.args else []
     if len(args) != 2:
-        await message.answer("⚠️ فرمت: /addzp آیدی مقدار")
+        await message.answer("⚠️ فرمت: `/addzp آیدی مقدار`")
         return
     
     try:
@@ -314,22 +429,36 @@ async def addzp_command(message: types.Message, command: CommandObject):
         update_user_zp(user_id, amount)
         await message.answer(f"✅ {amount:,} ZP به کاربر {user_id} اضافه شد.")
         
+        try:
+            await bot.send_message(
+                user_id,
+                f"🪙 **هدیه از ادمین!**\n\n"
+                f"⛏️ **{amount:,} ZP** دریافت کردید!"
+            )
+        except:
+            pass
+            
     except:
-        await message.answer("❌ خطا!")
+        await message.answer("❌ خطا! فرمت درست: `/addzp 123456789 1000`")
 
 @dp.message(Command("setlevel"))
 async def setlevel_command(message: types.Message, command: CommandObject):
+    """تغییر سطح کاربر"""
     if not is_admin(message.from_user.id):
         return
     
     args = command.args.split() if command.args else []
     if len(args) != 2:
-        await message.answer("⚠️ فرمت: /setlevel آیدی سطح")
+        await message.answer("⚠️ فرمت: `/setlevel آیدی سطح`")
         return
     
     try:
         user_id = int(args[0])
         level = int(args[1])
+        
+        if level < 1 or level > 100:
+            await message.answer("⚠️ سطح باید بین 1 تا 100 باشد.")
+            return
         
         conn = get_connection()
         c = conn.cursor()
@@ -339,17 +468,27 @@ async def setlevel_command(message: types.Message, command: CommandObject):
         
         await message.answer(f"✅ سطح کاربر {user_id} به {level} تغییر یافت.")
         
+        try:
+            await bot.send_message(
+                user_id,
+                f"🎯 **سطح شما تغییر کرد!**\n\n"
+                f"🆙 **سطح جدید:** {level}"
+            )
+        except:
+            pass
+            
     except:
-        await message.answer("❌ خطا!")
+        await message.answer("❌ خطا! فرمت درست: `/setlevel 123456789 10`")
 
 @dp.message(Command("giftall"))
 async def giftall_command(message: types.Message, command: CommandObject):
+    """هدیه به همه کاربران"""
     if not is_admin(message.from_user.id):
         return
     
     args = command.args.split() if command.args else []
     if len(args) < 1:
-        await message.answer("⚠️ فرمت: /giftall سکه [جم] [zp]")
+        await message.answer("⚠️ فرمت: `/giftall سکه [جم] [zp]`")
         return
     
     try:
@@ -364,21 +503,39 @@ async def giftall_command(message: types.Message, command: CommandObject):
         conn.commit()
         conn.close()
         
-        await message.answer(f"✅ هدیه به همه ارسال شد!")
+        await message.answer(
+            f"✅ هدیه ارسال شد!\n\n"
+            f"💰 سکه به هر نفر: {coins:,}\n"
+            f"💎 جم به هر نفر: {gems}\n"
+            f"🪙 ZP به هر نفر: {zp:,}"
+        )
         
     except:
-        await message.answer("❌ خطا!")
+        await message.answer("❌ خطا! فرمت درست: `/giftall 1000 5 100`")
 
 @dp.message(Command("broadcast"))
 async def broadcast_command(message: types.Message, command: CommandObject):
+    """پیام همگانی"""
     if not is_admin(message.from_user.id):
         return
     
     if not command.args:
-        await message.answer("⚠️ فرمت: /broadcast متن")
+        await message.answer("⚠️ فرمت: `/broadcast متن پیام`")
         return
     
-    await message.answer(f"📣 پیام ارسال شد:\n{command.args}")
+    text = command.args
+    await message.answer(f"📣 پیام به همه کاربران ارسال شد:\n\n{text}")
+
+@dp.message(F.text == "📊 آمار")
+async def stats_handler(message: types.Message):
+    """آمار ربات"""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute('SELECT COUNT(*) FROM users')
+    total = c.fetchone()[0]
+    conn.close()
+    
+    await message.answer(f"📊 **آمار ربات**\n\n👥 کاربران: {total}\n✅ آنلاین: بله")
 
 # ==================== وب سرور ====================
 
@@ -395,14 +552,29 @@ async def start_web_server():
     print(f"🌐 Web server started on port {PORT}")
     return runner
 
+# ==================== اجرای اصلی ====================
+
 async def main():
+    """تابع اصلی اجرای ربات"""
     print("🚀 Starting WarZone Bot...")
+    
+    # راه‌اندازی وب سرور
     web_runner = await start_web_server()
     
     try:
+        # راه‌اندازی ربات
+        print("🤖 Bot is running...")
         await dp.start_polling(bot, skip_updates=True)
+    except Exception as e:
+        print(f"❌ Error in bot: {e}")
     finally:
         await web_runner.cleanup()
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    # اجرای ربات
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("👋 Bot stopped by user")
+    except Exception as e:
+        print(f"❌ Fatal error: {e}")
