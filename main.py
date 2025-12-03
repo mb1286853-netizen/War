@@ -162,8 +162,7 @@ class AdminStates(StatesGroup):
     waiting_for_gem_amount = State()
     waiting_for_zp_amount = State()
     waiting_for_level = State()
-
-# ==================== داده‌های بازی ====================
+    # ==================== داده‌های بازی ====================
 
 # 🚀 موشک‌های معمولی
 MISSILES = {
@@ -269,6 +268,7 @@ ATTACK_COMBOS = {
         "required_gems": 10
     }
 }
+
 # ==================== دیتابیس ====================
 class Database:
     _instance = None
@@ -309,7 +309,6 @@ class Database:
                 created_at INTEGER DEFAULT (strftime('%s', 'now'))
             )
         ''')
-        
         # جدول موشک‌ها
         c.execute('''
             CREATE TABLE IF NOT EXISTS user_missiles (
@@ -417,7 +416,7 @@ class Database:
             self.conn.commit()
             return c
         except sqlite3.Error as e:
-            logger.error(f"❌ Database error: {e}")
+            logger.error(f"❌ خطای دیتابیس: {e}")
             self.conn.rollback()
             raise
     
@@ -434,7 +433,7 @@ def get_user(user_id: int):
         user = c.fetchone()
         return dict(user) if user else None
     except Exception as e:
-        logger.error(f"Error getting user {user_id}: {e}")
+        logger.error(f"خطا در دریافت کاربر {user_id}: {e}")
         return None
 
 def create_user(user_id: int, username: str, full_name: str):
@@ -506,7 +505,7 @@ def update_user_coins(user_id: int, amount: int):
         
         return True
     except Exception as e:
-        logger.error(f"Error updating coins for {user_id}: {e}")
+        logger.error(f"خطا در بروزرسانی سکه برای {user_id}: {e}")
         return False
 
 def update_user_gems(user_id: int, amount: int):
@@ -528,9 +527,8 @@ def update_user_gems(user_id: int, amount: int):
         
         return True
     except Exception as e:
-        logger.error(f"Error updating gems for {user_id}: {e}")
+        logger.error(f"خطا در بروزرسانی جم برای {user_id}: {e}")
         return False
-
 def update_user_zp(user_id: int, amount: int):
     try:
         user = get_user(user_id)
@@ -550,7 +548,7 @@ def update_user_zp(user_id: int, amount: int):
         
         return True
     except Exception as e:
-        logger.error(f"Error updating ZP for {user_id}: {e}")
+        logger.error(f"خطا در بروزرسانی ZP برای {user_id}: {e}")
         return False
 
 def update_user_level(user_id: int, new_level: int):
@@ -562,7 +560,7 @@ def update_user_level(user_id: int, new_level: int):
                   (new_level, user_id))
         return True
     except Exception as e:
-        logger.error(f"Error updating level for {user_id}: {e}")
+        logger.error(f"خطا در بروزرسانی لول برای {user_id}: {e}")
         return False
 
 def get_user_missiles(user_id: int):
@@ -572,7 +570,7 @@ def get_user_missiles(user_id: int):
         missiles = {row['missile_name']: row['quantity'] for row in c.fetchall()}
         return missiles
     except Exception as e:
-        logger.error(f"Error getting missiles for {user_id}: {e}")
+        logger.error(f"خطا در دریافت موشک‌های کاربر {user_id}: {e}")
         return {}
 
 def update_user_missile(user_id: int, missile_name: str, amount: int):
@@ -600,7 +598,7 @@ def update_user_missile(user_id: int, missile_name: str, amount: int):
         
         return True
     except Exception as e:
-        logger.error(f"Error updating missile for {user_id}: {e}")
+        logger.error(f"خطا در بروزرسانی موشک برای {user_id}: {e}")
         return False
 
 def get_bot_stats():
@@ -610,7 +608,7 @@ def get_bot_stats():
         stats = c.fetchone()
         return dict(stats) if stats else None
     except Exception as e:
-        logger.error(f"Error getting bot stats: {e}")
+        logger.error(f"خطا در دریافت آمار ربات: {e}")
         return None
 
 def log_admin_action(admin_id: int, action: str, target_user_id: int = None, details: str = ""):
@@ -622,17 +620,17 @@ def log_admin_action(admin_id: int, action: str, target_user_id: int = None, det
         ''', (admin_id, action, target_user_id, details))
         return True
     except Exception as e:
-        logger.error(f"Error logging admin action: {e}")
+        logger.error(f"خطا در ثبت لاگ ادمین: {e}")
         return False
 
 def get_all_users():
     """دریافت لیست همه کاربران"""
     try:
-        c = db.execute('SELECT user_id, username, full_name, zone_coin, zone_gem, zone_point, level FROM users ORDER BY created_at DESC')
+        c = db.execute('SELECT user_id, username, full_name, zone_coin, zone_gem, zone_point, level, last_miner_claim FROM users ORDER BY created_at DESC')
         users = [dict(row) for row in c.fetchall()]
         return users
     except Exception as e:
-        logger.error(f"Error getting all users: {e}")
+        logger.error(f"خطا در دریافت لیست کاربران: {e}")
         return []
 
 # ==================== هندلرهای اصلی ====================
@@ -720,7 +718,6 @@ async def admin_panel_handler(message: types.Message):
         parse_mode=ParseMode.HTML,
         reply_markup=admin_panel_keyboard()
     )
-
 @dp.message(F.text == "👥 مدیریت کاربران")
 async def manage_users_handler(message: types.Message):
     """مدیریت کاربران"""
@@ -749,30 +746,72 @@ async def manage_users_handler(message: types.Message):
         parse_mode=ParseMode.HTML,
         reply_markup=back_keyboard()
     )
- # ==================== آمار ربات ====================
 
 @dp.message(F.text == "📊 آمار کامل")
-async def handle_stats_command(message: types.Message):
-    """مدیریت دستور آمار"""
+async def bot_stats_handler(message: types.Message):
+    """آمار کامل ربات"""
     if not is_admin(message.from_user.id):
-        await message.answer("🚫 دسترسی محدود به ادمین‌ها")
         return
     
-    # دریافت داده‌ها
-    users_count = len(get_all_users())
-    stats = get_bot_stats() or {}
-    
-    # ساخت پیام
-    response = (
-        f"📈 <b>آمار ربات</b>\n\n"
-        f"👥 کاربران: {users_count}\n"
-        f"💰 کل سکه: {stats.get('total_coins', 0):,}\n"
-        f"💎 کل جم: {stats.get('total_gems', 0):,}\n"
-        f"🪙 کل ZP: {stats.get('total_zp', 0):,}\n\n"
-        f"🆔 ادمین‌ها: {len(ADMIN_IDS)} نفر"
-    )
-    
-    await message.answer(response, parse_mode=ParseMode.HTML)
+    try:
+        # دریافت آمار
+        stats = get_bot_stats()
+        all_users = get_all_users()
+        
+        if not stats:
+            await message.answer("❌ خطا در دریافت آمار!")
+            return
+        
+        # محاسبه آمار
+        total_users = len(all_users)
+        
+        # محاسبه مجموع دارایی‌ها
+        total_coins = 0
+        total_gems = 0
+        total_zp = 0
+        active_users = 0
+        
+        now = int(datetime.now().timestamp())
+        for user in all_users:
+            total_coins += user.get('zone_coin', 0)
+            total_gems += user.get('zone_gem', 0)
+            total_zp += user.get('zone_point', 0)
+            
+            # کاربران فعال (آخرین 24 ساعت)
+            last_claim = user.get('last_miner_claim', 0)
+            if last_claim > now - 86400:
+                active_users += 1
+        
+        # زمان به‌روزرسانی
+        update_time = stats.get('last_updated', now)
+        try:
+            last_updated = datetime.fromtimestamp(update_time).strftime('%Y-%m-%d %H:%M:%S')
+        except:
+            last_updated = "نامشخص"
+        
+        # ساخت پیام
+        stats_message = (
+            f"📊 <b>آمار کامل ربات</b>\n\n"
+            f"👥 <b>کاربران:</b>\n"
+            f"• مجموع کاربران: {total_users:,}\n"
+            f"• کاربران فعال (24h): {active_users:,}\n\n"
+            f"💰 <b>اقتصاد بازی:</b>\n"
+            f"• مجموع سکه‌ها: {total_coins:,}\n"
+            f"• مجموع جم‌ها: {total_gems:,}\n"
+            f"• مجموع ZP: {total_zp:,}\n\n"
+            f"🏦 <b>آمار سرور:</b>\n"
+            f"• کل سکه تولید شده: {stats.get('total_coins', 0):,}\n"
+            f"• کل جم تولید شده: {stats.get('total_gems', 0):,}\n"
+            f"• کل ZP تولید شده: {stats.get('total_zp', 0):,}\n\n"
+            f"🕒 آخرین بروزرسانی: {last_updated}"
+        )
+        
+        await message.answer(stats_message, parse_mode=ParseMode.HTML)
+        
+    except Exception as e:
+        logger.error(f"خطا در آمار ربات: {e}")
+        await message.answer("❌ خطا در پردازش آمار!")
+
 @dp.message(F.text == "💰 +سکه")
 async def add_coins_handler(message: types.Message, state: FSMContext):
     """افزودن سکه به کاربر"""
@@ -905,419 +944,4 @@ async def process_user_id(message: types.Message, state: FSMContext):
             reply_markup=back_keyboard()
         )
         await state.set_state(AdminStates.waiting_for_level)
-
-@dp.message(AdminStates.waiting_for_coin_amount)
-async def process_coin_amount(message: types.Message, state: FSMContext):
-    """پردازش مقدار سکه"""
-    if message.text == "🔙 بازگشت":
-        await state.clear()
-        await message.answer("عملیات لغو شد.", reply_markup=admin_keyboard())
-        return
-    
-    try:
-        amount = int(message.text)
-        if amount == 0:
-            await message.answer("❌ مقدار نمی‌تواند صفر باشد!")
-            return
-        if abs(amount) > 1000000000:
-            await message.answer("❌ مقدار خیلی بزرگ است! حداکثر ۱,۰۰۰,۰۰۰,۰۰۰")
-            return
-    except ValueError:
-        await message.answer("❌ مقدار باید عدد باشد! لطفا دوباره ارسال کنید.")
-        return
-    
-    data = await state.get_data()
-    user_id = data.get('target_user_id')
-    user_name = data.get('user_name')
-    
-    # به‌روزرسانی سکه کاربر
-    success = update_user_coins(user_id, amount)
-    
-    if success:
-        # ثبت لاگ
-        log_admin_action(
-            message.from_user.id,
-            "add_coins",
-            user_id,
-            f"مقدار: {amount:,} سکه"
-        )
         
-        user = get_user(user_id)
-        await message.answer(
-            f"✅ <b>سکه با موفقیت اضافه شد!</b>\n\n"
-            f"👤 کاربر: {user_name}\n"
-            f"🆔 آیدی: {user_id}\n"
-            f"💰 مقدار: {amount:,} سکه\n"
-            f"💵 سکه جدید: {user['zone_coin']:,}\n\n"
-            f"عملیات توسط ادمین <code>{message.from_user.id}</code> انجام شد.",
-            parse_mode=ParseMode.HTML,
-            reply_markup=admin_keyboard()
-        )
-    else:
-        await message.answer("❌ خطا در افزودن سکه!")
-    
-    await state.clear()
-
-@dp.message(AdminStates.waiting_for_gem_amount)
-async def process_gem_amount(message: types.Message, state: FSMContext):
-    """پردازش مقدار جم"""
-    if message.text == "🔙 بازگشت":
-        await state.clear()
-        await message.answer("عملیات لغو شد.", reply_markup=admin_keyboard())
-        return
-    
-    try:
-        amount = int(message.text)
-        if amount == 0:
-            await message.answer("❌ مقدار نمی‌تواند صفر باشد!")
-            return
-        if abs(amount) > 1000000:
-            await message.answer("❌ مقدار خیلی بزرگ است! حداکثر ۱,۰۰۰,۰۰۰")
-            return
-    except ValueError:
-        await message.answer("❌ مقدار باید عدد باشد! لطفا دوباره ارسال کنید.")
-        return
-    
-    data = await state.get_data()
-    user_id = data.get('target_user_id')
-    user_name = data.get('user_name')
-    
-    # به‌روزرسانی جم کاربر
-    success = update_user_gems(user_id, amount)
-    
-    if success:
-        # ثبت لاگ
-        log_admin_action(
-            message.from_user.id,
-            "add_gems",
-            user_id,
-            f"مقدار: {amount:,} جم"
-        )
-        
-        user = get_user(user_id)
-        await message.answer(
-            f"✅ <b>جم با موفقیت اضافه شد!</b>\n\n"
-            f"👤 کاربر: {user_name}\n"
-            f"🆔 آیدی: {user_id}\n"
-            f"💎 مقدار: {amount:,} جم\n"
-            f"💎 جم جدید: {user['zone_gem']:,}\n\n"
-            f"عملیات توسط ادمین <code>{message.from_user.id}</code> انجام شد.",
-            parse_mode=ParseMode.HTML,
-            reply_markup=admin_keyboard()
-        )
-    else:
-        await message.answer("❌ خطا در افزودن جم!")
-    
-    await state.clear()
-
-@dp.message(AdminStates.waiting_for_zp_amount)
-async def process_zp_amount(message: types.Message, state: FSMContext):
-    """پردازش مقدار ZP"""
-    if message.text == "🔙 بازگشت":
-        await state.clear()
-        await message.answer("عملیات لغو شد.", reply_markup=admin_keyboard())
-        return
-    
-    try:
-        amount = int(message.text)
-        if amount == 0:
-            await message.answer("❌ مقدار نمی‌تواند صفر باشد!")
-            return
-        if abs(amount) > 1000000:
-            await message.answer("❌ مقدار خیلی بزرگ است! حداکثر ۱,۰۰۰,۰۰۰")
-            return
-    except ValueError:
-        await message.answer("❌ مقدار باید عدد باشد! لطفا دوباره ارسال کنید.")
-        return
-    
-    data = await state.get_data()
-    user_id = data.get('target_user_id')
-    user_name = data.get('user_name')
-    
-    # به‌روزرسانی ZP کاربر
-    success = update_user_zp(user_id, amount)
-    
-    if success:
-        # ثبت لاگ
-        log_admin_action(
-            message.from_user.id,
-            "add_zp",
-            user_id,
-            f"مقدار: {amount:,} ZP"
-        )
-        
-        user = get_user(user_id)
-        await message.answer(
-            f"✅ <b>ZP با موفقیت اضافه شد!</b>\n\n"
-            f"👤 کاربر: {user_name}\n"
-            f"🆔 آیدی: {user_id}\n"
-            f"🪙 مقدار: {amount:,} ZP\n"
-            f"🪙 ZP جدید: {user['zone_point']:,}\n\n"
-            f"عملیات توسط ادمین <code>{message.from_user.id}</code> انجام شد.",
-            parse_mode=ParseMode.HTML,
-            reply_markup=admin_keyboard()
-        )
-    else:
-        await message.answer("❌ خطا در افزودن ZP!")
-    
-    await state.clear()
-
-@dp.message(AdminStates.waiting_for_level)
-async def process_level(message: types.Message, state: FSMContext):
-    """پردازش لول جدید"""
-    if message.text == "🔙 بازگشت":
-        await state.clear()
-        await message.answer("عملیات لغو شد.", reply_markup=admin_keyboard())
-        return
-    
-    try:
-        new_level = int(message.text)
-        if new_level < 1 or new_level > 100:
-            await message.answer("❌ لول باید بین ۱ تا ۱۰۰ باشد!")
-            return
-    except ValueError:
-        await message.answer("❌ لول باید عدد باشد! لطفا دوباره ارسال کنید.")
-        return
-    
-    data = await state.get_data()
-    user_id = data.get('target_user_id')
-    user_name = data.get('user_name')
-    
-    # به‌روزرسانی لول کاربر
-    success = update_user_level(user_id, new_level)
-    
-    if success:
-        # ثبت لاگ
-        log_admin_action(
-            message.from_user.id,
-            "change_level",
-            user_id,
-            f"از {data.get('old_level', '?')} به {new_level}"
-        )
-        
-        await message.answer(
-            f"✅ <b>لول با موفقیت تغییر کرد!</b>\n\n"
-            f"👤 کاربر: {user_name}\n"
-            f"🆔 آیدی: {user_id}\n"
-            f"📊 لول جدید: {new_level}\n\n"
-            f"عملیات توسط ادمین <code>{message.from_user.id}</code> انجام شد.",
-            parse_mode=ParseMode.HTML,
-            reply_markup=admin_keyboard()
-        )
-    else:
-        await message.answer("❌ خطا در تغییر لول!")
-    
-    await state.clear()
-
-@dp.message(F.text == "📤 خروج از ادمین")
-async def exit_admin_handler(message: types.Message):
-    """خروج از حالت ادمین"""
-    user_id = message.from_user.id
-    keyboard = user_keyboard()
-    
-    await message.answer(
-        "👤 <b>حالت عادی کاربر</b>\n\n"
-        "شما از حالت ادمین خارج شدید.",
-        parse_mode=ParseMode.HTML,
-        reply_markup=keyboard
-    )
-
-@dp.message(F.text == "🎮 مدیریت بازی")
-async def manage_game_handler(message: types.Message):
-    """مدیریت بازی"""
-    if not is_admin(message.from_user.id):
-        return
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔄 ریست دیتابیس", callback_data="admin_reset_db")],
-        [InlineKeyboardButton(text="📊 ریست آمار", callback_data="admin_reset_stats")],
-        [InlineKeyboardButton(text="⚙️ تنظیمات بازی", callback_data="admin_game_settings")],
-    ])
-    
-    await message.answer(
-        "🎮 <b>مدیریت بازی</b>\n\n"
-        "لطفا یکی از گزینه‌ها را انتخاب کنید:",
-        parse_mode=ParseMode.HTML,
-        reply_markup=keyboard
-    )
-
-@dp.message(F.text == "⚙️ تنظیمات ربات")
-async def bot_settings_handler(message: types.Message):
-    """تنظیمات ربات"""
-    if not is_admin(message.from_user.id):
-        return
-    
-    stats = get_bot_stats()
-    
-    await message.answer(
-        f"⚙️ <b>تنظیمات ربات</b>\n\n"
-        f"📊 <b>آمار فعلی:</b>\n"
-        f"• کل کاربران: {stats.get('total_users', 0) if stats else 0}\n"
-        f"• کل سکه: {stats.get('total_coins', 0) if stats else 0:,}\n"
-        f"• کل جم: {stats.get('total_gems', 0) if stats else 0:,}\n"
-        f"• کل ZP: {stats.get('total_zp', 0) if stats else 0:,}\n\n"
-        f"🆔 <b>ادمین‌ها:</b>\n"
-        f"{', '.join(str(admin_id) for admin_id in ADMIN_IDS)}\n\n"
-        f"🌐 <b>وب سرور:</b>\n"
-        f"• پورت: {PORT}\n"
-        f"• Keep-Alive: {'✅ فعال' if KEEP_ALIVE_URL else '❌ غیرفعال'}\n\n"
-        f"برای تغییر تنظیمات، فایل .env را ویرایش کنید.",
-        parse_mode=ParseMode.HTML
-    )
-
-@dp.callback_query(F.data.startswith("admin_"))
-async def admin_callback_handler(callback: types.CallbackQuery):
-    """مدیریت کلیک‌های ادمین"""
-    if not is_admin(callback.from_user.id):
-        await callback.answer("⛔ دسترسی ممنوع!", show_alert=True)
-        return
-    
-    action = callback.data
-    
-    if action == "admin_reset_db":
-        await callback.answer("⚠️ این عمل قابل بازگشت نیست!", show_alert=True)
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ بله، ریست کن", callback_data="admin_confirm_reset_db")],
-            [InlineKeyboardButton(text="❌ خیر، لغو کن", callback_data="admin_cancel_reset")]
-        ])
-        
-        await callback.message.answer(
-            "⚠️ <b>هشدار!</b>\n\n"
-            "آیا مطمئن هستید که می‌خواهید دیتابیس را ریست کنید؟\n\n"
-            "🔴 <b>تمام داده‌های کاربران پاک خواهد شد!</b>\n"
-            "🔴 این عمل غیرقابل بازگشت است!",
-            parse_mode=ParseMode.HTML,
-            reply_markup=keyboard
-        )
-    
-    elif action == "admin_confirm_reset_db":
-        try:
-            # بستن و حذف دیتابیس
-            db.close()
-            if os.path.exists(DB_PATH):
-                os.remove(DB_PATH)
-            
-            # ایجاد دوباره
-            db.init()
-            
-            await callback.message.answer(
-                "✅ <b>دیتابیس با موفقیت ریست شد!</b>\n\n"
-                "همه داده‌ها پاک شدند و دیتابیس جدید ایجاد شد.",
-                parse_mode=ParseMode.HTML
-            )
-            await callback.answer("✅ ریست کامل شد!")
-        except Exception as e:
-            await callback.message.answer(f"❌ خطا در ریست دیتابیس: {e}")
-            await callback.answer("❌ خطا!")
-    
-    elif action == "admin_reset_stats":
-        try:
-            db.execute('UPDATE bot_stats SET total_coins = 0, total_gems = 0, total_zp = 0 WHERE id = 1')
-            
-            await callback.message.answer(
-                "✅ <b>آمار با موفقیت ریست شد!</b>\n\n"
-                "آمار کلی بازی به صفر بازگردانی شد.",
-                parse_mode=ParseMode.HTML
-            )
-            await callback.answer("✅ آمار ریست شد!")
-        except Exception as e:
-            await callback.message.answer(f"❌ خطا در ریست آمار: {e}")
-            await callback.answer("❌ خطا!")
-    
-    elif action == "admin_cancel_reset":
-        await callback.message.answer("❌ عملیات ریست لغو شد.")
-        await callback.answer("❌ لغو شد!")
-    
-    elif action == "admin_game_settings":
-        await callback.message.answer(
-            "⚙️ <b>تنظیمات بازی</b>\n\n"
-            "تنظیمات فعلی بازی:\n\n"
-            f"🚀 <b>موشک‌ها:</b> {len(ALL_MISSILES)} نوع\n"
-            f"✈️ <b>جنگنده‌ها:</b> {len(FIGHTERS)} نوع\n"
-            f"🛸 <b>پهپادها:</b> {len(DRONES)} نوع\n"
-            f"🛡️ <b>سیستم دفاعی:</b> {len(DEFENSES)} نوع\n"
-            f"🎁 <b>باکس‌ها:</b> {len(BOXES)} نوع\n"
-            f"💥 <b>ترکیب‌های حمله:</b> {len(ATTACK_COMBOS)} نوع\n\n"
-            "برای تغییر تنظیمات، کد منبع را ویرایش کنید.",
-            parse_mode=ParseMode.HTML
-        )
-        await callback.answer("⚙️ تنظیمات بازی")
-
-@dp.message(F.text == "🔙 بازگشت")
-async def back_handler(message: types.Message):
-    """بازگشت به منوی اصلی"""
-    user_id = message.from_user.id
-    
-    if is_admin(user_id):
-        keyboard = admin_keyboard()
-    else:
-        keyboard = user_keyboard()
-    
-    await message.answer(
-        "📋 <b>منوی اصلی</b>\n\n"
-        "لطفا گزینه مورد نظر را انتخاب کنید:",
-        parse_mode=ParseMode.HTML,
-        reply_markup=keyboard
-    )
-
-# ==================== سیستم Keep-Alive ====================
-async def keep_alive_ping():
-    """پینگ دوره‌ی به سرور برای جلوگیری از خوابیدن"""
-    if not KEEP_ALIVE_URL:
-        logger.warning("⚠️ KEEP_ALIVE_URL تنظیم نشده - سیستم keep-alive غیرفعال")
-        return
-    
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(KEEP_ALIVE_URL) as response:
-                if response.status == 200:
-                    logger.info("✅ Keep-alive ping successful")
-                else:
-                    logger.warning(f"⚠️ Keep-alive failed: {response.status}")
-    except Exception as e:
-        logger.error(f"❌ Keep-alive error: {e}")
-
-async def start_keep_alive():
-    """شروع پینگ دوره‌ای هر 5 دقیقه"""
-    while True:
-        await asyncio.sleep(300)  # هر 5 دقیقه
-        await keep_alive_ping()
-
-async def web_server():
-    """وب سرور ساده برای keep-alive"""
-    async def handle(request):
-        return web.Response(text='Bot is alive!')
-    
-    app = web.Application()
-    app.router.add_get('/', handle)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', PORT)
-    await site.start()
-    logger.info(f"🌐 Web server started on port {PORT}")
-
-# ==================== تابع اصلی ====================
-async def main():
-    """تابع اصلی اجرای ربات"""
-    try:
-        # راه‌اندازی دیتابیس
-        db.init()
-        
-        # شروع وب سرور برای keep-alive
-        asyncio.create_task(web_server())
-        
-        # شروع پینگ دوره‌ای keep-alive
-        if KEEP_ALIVE_URL:
-            asyncio.create_task(start_keep_alive())
-            logger.info("🚀 سیستم keep-alive فعال شد")
-        
-        # پاک کردن webhook و شروع polling
-        await bot.delete_webhook(drop_pending_updates=True)
-        
-        logger.info("🤖 ربات Warzone شروع به کار کرد...")
-        
-        # شروع dispatcher
-        await dp.start_polling(bot)
-        
-    except
