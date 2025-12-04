@@ -40,28 +40,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ==================== DATABASE CLASS ====================
-# main.py - بخش Database تصحیح شده
 class Database:
     def __init__(self):
         self.db_path = "warzone.db"
         self.backup_dir = "backups"
         self.setup_database()
-        self.start_backup_scheduler()
-    
+        
     def setup_database(self):
-        """ایجاد دیتابیس و جدول‌ها"""
+        """ایجاد دیتابیس و جدول‌ها - بدون کامنت داخل SQL"""
         os.makedirs("data", exist_ok=True)
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # جدول کاربران
+        # ========== جدول کاربران ==========
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
                 username TEXT,
                 full_name TEXT,
                 zone_coin INTEGER DEFAULT 1000,
-                zone_gem INTEGER DEFAULT 0,  -- تغییر: کاربران عادی جم ندارند
+                zone_gem INTEGER DEFAULT 0,
                 zone_point INTEGER DEFAULT 500,
                 level INTEGER DEFAULT 1,
                 xp INTEGER DEFAULT 0,
@@ -72,7 +70,7 @@ class Database:
             )
         ''')
         
-        # جدول موشک‌ها
+        # ========== جدول موشک‌ها ==========
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS user_missiles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,34 +81,7 @@ class Database:
             )
         ''')
         
-        # جدول ترکیب‌های ساخته شده
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_combos (
-                combo_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                combo_name TEXT,
-                missiles TEXT,  -- JSON list of missiles
-                damage_multiplier REAL DEFAULT 1.0,
-                is_active BOOLEAN DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(user_id)
-            )
-        ''')
-        
-        # جدول پشتیبانی
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS support_tickets (
-                ticket_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                message TEXT,
-                status TEXT DEFAULT 'open',
-                admin_reply TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(user_id)
-            )
-        ''')
-        
-        # جدول حملات
+        # ========== جدول حملات ==========
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS attacks (
                 attack_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -119,25 +90,29 @@ class Database:
                 damage INTEGER,
                 missile_type TEXT,
                 combo_type TEXT,
-                custom_combo_id INTEGER,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (attacker_id) REFERENCES users(user_id),
+                FOREIGN KEY (target_id) REFERENCES users(user_id)
             )
         ''')
         
-        # جدول لاگ برای عیب‌یابی Railway
+        # ========== جدول خریدها ==========
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS railway_logs (
-                log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                event TEXT,
-                details TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            CREATE TABLE IF NOT EXISTS purchases (
+                purchase_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                item_type TEXT,
+                item_name TEXT,
+                quantity INTEGER,
+                price INTEGER,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
         ''')
         
         conn.commit()
         conn.close()
-        logger.info("✅ دیتابیس راه‌اندازی شد")
-        self.log_event("database_setup", "Database initialized successfully")
+        print("✅ Database setup complete")
 # ==================== BOT INIT ====================
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
