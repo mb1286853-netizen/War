@@ -511,6 +511,7 @@ async def my_base(message: Message):
     
     await message.answer(text, reply_markup=get_back_keyboard())
     @dp.message(F.text == "ℹ️ راهنما")
+@dp.message(F.text == "ℹ️ راهنما")
 async def help_menu(message: Message):
     """راهنما"""
     text = """
@@ -532,6 +533,7 @@ async def help_menu(message: Message):
 
 📞 **پشتیبانی:** @WarzoneSupport
 """
+    await message.answer(text, reply_markup=get_back_keyboard())
     await message.answer(text, reply_markup=get_back_keyboard())
 
 # ==================== CALLBACK HANDLERS ====================
