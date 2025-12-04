@@ -1,8 +1,3 @@
-"""
-🏆 ربات Warzone - نسخه Railway اصلاح شده
-قسمت 1 از 5
-"""
-
 import asyncio
 import logging
 import sqlite3
@@ -1767,17 +1762,21 @@ if __name__ == "__main__":
     
     # اجرای اصلی با try-excatch
     try:
+        
         # ایجاد فایل PID برای Railway
-        with open("/tmp/bot.pid", "w") as f:
-            f.write(str(os.getpid()))
-        
-        logger.info("=" * 50)
-        logger.info("🏆 Warzone Bot Starting...")
-        logger.info(f"👨‍💻 Developer: {DEVELOPER_ID}")
-        logger.info(f"📅 Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        logger.info("=" * 50)
-        
-        asyncio.run(main())
+        # خط 1788 و اطراف آن:
+if __name__ == "__main__":
+    # ایجاد فایل PID برای Railway
+    with open("/tmp/bot.pid", "w") as f:
+        f.write(str(os.getpid()))
+    
+    logger.info("=" * 50)
+    logger.info("🏆 Warzone Bot Starting...")
+    logger.info(f"👨‍💻 Developer: {DEVELOPER_ID}")
+    logger.info(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")  # ✅ اصلاح شد
+    logger.info("=" * 50)
+    
+    asyncio.run(main())
         
     except KeyboardInterrupt:
         logger.info("🛑 Bot stopped by user (Ctrl+C)")
