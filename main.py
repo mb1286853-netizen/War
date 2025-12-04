@@ -1758,14 +1758,9 @@ if __name__ == "__main__":
     # تنظیم encoding
     if sys.platform == "win32":
         import asyncio
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    
-    # اجرای اصلی با try-excatch
-    try:
-        
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())       
         # ایجاد فایل PID برای Railway
-        # خط 1788 و اطراف آن:
-if __name__ == "__main__":
+
     # ایجاد فایل PID برای Railway
     with open("/tmp/bot.pid", "w") as f:
         f.write(str(os.getpid()))
