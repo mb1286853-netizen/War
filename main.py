@@ -40,6 +40,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ==================== DATABASE CLASS ====================
+# main.py - بخش Database تصحیح شده
 class Database:
     def __init__(self):
         self.db_path = "warzone.db"
@@ -53,14 +54,14 @@ class Database:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # جدول کاربران (بدون جم اولیه)
+        # جدول کاربران
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
                 username TEXT,
                 full_name TEXT,
                 zone_coin INTEGER DEFAULT 1000,
-                zone_gem INTEGER DEFAULT 0,  # تغییر: جم اولیه 0
+                zone_gem INTEGER DEFAULT 0,  -- تغییر: کاربران عادی جم ندارند
                 zone_point INTEGER DEFAULT 500,
                 level INTEGER DEFAULT 1,
                 xp INTEGER DEFAULT 0,
@@ -88,7 +89,7 @@ class Database:
                 combo_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
                 combo_name TEXT,
-                missiles TEXT,  # JSON list of missiles
+                missiles TEXT,  -- JSON list of missiles
                 damage_multiplier REAL DEFAULT 1.0,
                 is_active BOOLEAN DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -137,80 +138,6 @@ class Database:
         conn.close()
         logger.info("✅ دیتابیس راه‌اندازی شد")
         self.log_event("database_setup", "Database initialized successfully")
-    
-    def log_event(self, event: str, details: str):
-        """ثبت رویداد برای عیب‌یابی Railway"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('INSERT INTO railway_logs (event, details) VALUES (?, ?)', 
-                         (event, details))
-            conn.commit()
-            conn.close()
-        except:
-            pass
-    
-    def start_backup_scheduler(self):
-        """شروع backup خودکار"""
-        os.makedirs(self.backup_dir, exist_ok=True)
-        
-        def backup_job():
-            try:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                backup_file = f"{self.backup_dir}/backup_{timestamp}.db"
-                shutil.copy2(self.db_path, backup_file)
-                
-                # حذف backup های قدیمی (بیش از 3 روز)
-                for file in os.listdir(self.backup_dir):
-                    if file.endswith('.db'):
-                        file_path = os.path.join(self.backup_dir, file)
-                        if os.path.getmtime(file_path) < time.time() - 3*24*3600:
-                            os.remove(file_path)
-                
-                logger.info(f"✅ Backup ایجاد شد: {backup_file}")
-                self.log_event("backup_created", backup_file)
-            except Exception as e:
-                logger.error(f"❌ خطا در backup: {e}")
-                self.log_event("backup_failed", str(e))
-        
-        # اجرای backup در ترد جداگانه (هر 6 ساعت)
-        def backup_loop():
-            while True:
-                backup_job()
-                time.sleep(6 * 3600)  # هر 6 ساعت
-        
-        thread = threading.Thread(target=backup_loop, daemon=True)
-        thread.start()
-        self.log_event("backup_scheduler", "Backup scheduler started")
-    
-    def get_connection(self):
-        """دریافت connection به دیتابیس"""
-        return sqlite3.connect(self.db_path)
-    
-    def get_user(self, user_id: int):
-        """دریافت اطلاعات کاربر"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
-        user = cursor.fetchone()
-        conn.close()
-        return user
-    
-    def create_user(self, user_id: int, username: str, full_name: str):
-        """ایجاد کاربر جدید"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT OR IGNORE INTO users (user_id, username, full_name) 
-            VALUES (?, ?, ?)
-        ''', (user_id, username, full_name))
-        
-        conn.commit()
-        conn.close()
-        logger.info(f"✅ کاربر ایجاد شد: {user_id}")
-        self.log_event("user_created", f"User {user_id} - {full_name}")
-
 # ==================== BOT INIT ====================
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
